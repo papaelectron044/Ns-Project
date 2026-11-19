@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Task Manager | Node.js Project</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, Arial, sans-serif; background: #f3f5fb; color: #172033; }
+    main { width: min(720px, 92%); margin: 48px auto; }
+    .hero { background: #18264a; color: white; padding: 28px; border-radius: 20px 20px 0 0; }
+    .hero p { color: #d4dcf4; margin-bottom: 0; }
+    .panel { background: white; padding: 24px; border-radius: 0 0 20px 20px; box-shadow: 0 12px 35px #15204412; }
+    form { display: flex; gap: 10px; }
+    input { flex: 1; min-width: 0; padding: 13px; border: 1px solid #cbd2e1; border-radius: 10px; font-size: 16px; }
+    button { border: 0; padding: 12px 16px; border-radius: 10px; background: #3759d7; color: white; font-weight: 650; cursor: pointer; }
+    button:hover { opacity: .9; }
+    ul { list-style: none; padding: 0; margin: 20px 0 0; }
+    li { display: flex; align-items: center; gap: 12px; padding: 14px 0; border-bottom: 1px solid #edf0f6; }
+    li span { flex: 1; overflow-wrap: anywhere; }
+    li.done span { color: #7a8499; text-decoration: line-through; }
+    .delete { background: #fbe8e8; color: #9f2626; padding: 8px 10px; }
+    .toggle { width: 20px; height: 20px; accent-color: #3759d7; }
+    .status { color: #6a7489; font-size: 14px; margin-top: 18px; }
+    @media (max-width: 480px) { main { margin: 20px auto; } .hero, .panel { padding: 20px; } form { flex-direction: column; } }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <h1>My Task Manager</h1>
+      <p>A simple task app built with Node.js, Express, and JavaScript.</p>
+    </section>
+    <section class="panel">
+      <form id="task-form">
+        <input id="task-title" type="text" placeholder="What do you need to do?" maxlength="120" required>
+        <button type="submit">Add task</button>
+      </form>
+      <ul id="task-list"></ul>
+      <p class="status" id="status">Loading tasks…</p>
+    </section>
+  </main>
+  <script>
+    const list = document.getElementById("task-list");
+    const statusText = document.getElementById("status");
+    const form = document.getElementById("task-form");
+    const titleInput = document.getElementById("task-title");
+
+    async function request(url, options = {}) {
+      const response = await fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        ...options
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Something went wrong.");
+      return data;
+    }
+
+    function render(tasks) {
+      list.innerHTML = "";
+      tasks.forEach(task => {
+        const li = document.createElement("li");
+        if (task.completed) li.classList.add("done");
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.className = "toggle";
+        checkbox.checked = task.completed;
+        checkbox.setAttribute("aria-label", "Mark task complete");
+        checkbox.addEventListener("change", async () => {
+          try {
+            await request(`/api/tasks/${task.id}`, {
+              method: "PATCH",
+              body: JSON.stringify({ completed: checkbox.checked })
+            });
+            await loadTasks();
+          } catch (error) { statusText.textContent = error.message; }
+        });
+
+        const span = document.createElement("span");
+        span.textContent = task.title;
+
+        const del = document.createElement("button");
+        del.className = "delete";
+        del.textContent = "Delete";
+        del.addEventListener("click", async () => {
+          try {
+            await request(`/api/tasks/${task.id}`, { method: "DELETE" });
+            await loadTasks();
+          } catch (error) { statusText.textContent = error.message; }
+        });
+
+        li.append(checkbox, span, del);
+        list.appendChild(li);
+      });
+      statusText.textContent = `${tasks.length} task(s) · API: /api/tasks`;
+    }
+
+    async function loadTasks() {
+      try { render(await request("/api/tasks")); }
+      catch (error) { statusText.textContent = error.message; }
+    }
+
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      const title = titleInput.value.trim();
+      if (!title) return;
+      try {
+        await request("/api/tasks", {
+          method: "POST",
+          body: JSON.stringify({ title })
+        });
+        titleInput.value = "";
+        await loadTasks();
+      } catch (error) { statusText.textContent = error.message; }
+    });
+
+    loadTasks();
+  </script>
+</body>
+</html>
